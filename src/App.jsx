@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -18,6 +18,11 @@ import AddIcon from "@mui/icons-material/Add";
 import SettingsPanel from "./components/SettingsPanel";
 import AnalysisBoard from "./components/AnalysisBoard";
 import ChatPanel from "./components/ChatPanel";
+import {
+  deriveFenSequence,
+  parseFenOrPgnInput,
+  parseStockfishLine
+} from "./utils/analysisHelpers";
 
 const electronAPI = typeof window !== "undefined" ? window.electronAPI : null;
 const SETTINGS_FLAG = "chess-to-me:settings-saved";
@@ -32,16 +37,6 @@ const DEFAULT_FORM = {
   referenceDbUsers: ""
 };
 
-const formatScore = (score) => {
-  if (!score) {
-    return "Score unknown";
-  }
-  if (score.type === "mate") {
-    return `Mate ${score.value}`;
-  }
-  return `CP ${score.value}`;
-};
-
 export default function App() {
   const [viewMode, setViewMode] = useState(() => {
     if (typeof window === "undefined") return "settings";
@@ -53,19 +48,28 @@ export default function App() {
   const [statusMessage, setStatusMessage] = useState("");
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [analysisLoading, setAnalysisLoading] = useState(false);
-  const [analysisStatus, setAnalysisStatus] = useState("Load a FEN string or move pieces on the board.");
+  const [analysisStatus, setAnalysisStatus] = useState("");
   const [analysisLines, setAnalysisLines] = useState([]);
+  const [analysisEntries, setAnalysisEntries] = useState([]);
+  const [lineDialogOpen, setLineDialogOpen] = useState(false);
+  const [activeLine, setActiveLine] = useState(null);
+  const [lineAnalysisText, setLineAnalysisText] = useState("");
+  const [lineAnalysisLoading, setLineAnalysisLoading] = useState(false);
+  const [lineAnalysisError, setLineAnalysisError] = useState("");
   const [explanations, setExplanations] = useState([]);
   const [currentFen, setCurrentFen] = useState("start");
-  const [fenInput, setFenInput] = useState("start");
   const [questionText, setQuestionText] = useState("");
   const [questionResponse, setQuestionResponse] = useState("");
   const [questionLoading, setQuestionLoading] = useState(false);
-  const [fenDialogOpen, setFenDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importText, setImportText] = useState("start");
+  const [importError, setImportError] = useState("");
+  const [importLoading, setImportLoading] = useState(false);
   const [windowSize, setWindowSize] = useState(() => ({
     width: typeof window !== "undefined" ? window.innerWidth : 1280,
     height: typeof window !== "undefined" ? window.innerHeight : 720
   }));
+  const importFileInput = useRef(null);
 
   const fetchSystemStatus = useCallback(async () => {
     if (!electronAPI?.getSystemStatus) {
@@ -146,6 +150,17 @@ export default function App() {
     [formState.explainLanguage, formState.ollamaModel, formState.ollamaBaseUrl]
   );
 
+  const handleAnalysisSuccess = useCallback(
+    (lines, fen) => {
+      setAnalysisLines(lines);
+      const entries = (lines || []).map((line, index) => parseStockfishLine(line, index + 1));
+      setAnalysisEntries(entries);
+      setAnalysisStatus("");
+      fetchExplanations(fen, lines);
+    },
+    [fetchExplanations]
+  );
+
   const runAnalysis = useCallback(
     async (fen) => {
       if (!electronAPI?.analyzePosition) {
@@ -153,7 +168,7 @@ export default function App() {
         return;
       }
       setAnalysisLoading(true);
-      setAnalysisStatus("Running Stockfish...");
+      setAnalysisStatus("");
       try {
         const response = await electronAPI.analyzePosition({
           fen,
@@ -163,22 +178,38 @@ export default function App() {
         if (!response?.ok) {
           setAnalysisStatus(response?.error || "Stockfish failed to return analysis.");
           setAnalysisLines([]);
+          setAnalysisEntries([]);
           setExplanations([]);
           return;
         }
         const lines = response.analysis?.lines || [];
-        setAnalysisLines(lines);
-        setAnalysisStatus("Analysis ready.");
-        fetchExplanations(fen, lines);
+        handleAnalysisSuccess(lines, fen);
       } catch (err) {
         setAnalysisStatus("Stockfish analysis failed.");
         setAnalysisLines([]);
+        setAnalysisEntries([]);
         setExplanations([]);
       } finally {
         setAnalysisLoading(false);
       }
     },
-    [fetchExplanations, formState.analysisDepth]
+    [formState.analysisDepth, handleAnalysisSuccess]
+  );
+
+  const applyPositions = useCallback(
+    (positions, message) => {
+      if (!positions?.length) {
+        setAnalysisStatus("No valid positions found.");
+        return;
+      }
+      const finalFen = positions[positions.length - 1];
+      setImportText(finalFen === "start" ? "start" : finalFen);
+      setCurrentFen(finalFen);
+      setStatusMessage(message || "Position loaded.");
+      setAnalysisStatus("");
+      runAnalysis(finalFen);
+    },
+    [runAnalysis]
   );
 
   const handleFormChange = useCallback((key, value) => {
@@ -281,28 +312,124 @@ export default function App() {
     }
   }, [engineStatus]);
 
-  const handleApplyFen = useCallback(() => {
-    const rawFen = String(fenInput || "").trim();
-    if (!rawFen) {
-      setStatusMessage("Enter a FEN string to load a position.");
-      return;
-    }
-    const parts = rawFen.split(/\s+/);
-    if (parts.length !== 6) {
-      setStatusMessage("Invalid FEN: must contain six fields.");
-      return;
-    }
-    setCurrentFen(rawFen);
-    setStatusMessage("FEN loaded.");
-    runAnalysis(rawFen);
-  }, [fenInput, runAnalysis]);
-
   const handleResetToStart = useCallback(() => {
-    setFenInput("start");
-    setCurrentFen("start");
-    setStatusMessage("Start position loaded.");
-    runAnalysis("start");
-  }, [runAnalysis]);
+    setImportText("start");
+    setAnalysisStatus("");
+    applyPositions(["start"], "Start position loaded.");
+  }, [applyPositions]);
+
+  const handleLineDialogClose = useCallback(() => {
+    setLineDialogOpen(false);
+    setActiveLine(null);
+    setLineAnalysisText("");
+    setLineAnalysisError("");
+  }, []);
+
+  const handleShowLine = useCallback(
+    async (entry) => {
+      if (!entry) {
+        return;
+      }
+      setActiveLine(entry);
+      setLineDialogOpen(true);
+      setLineAnalysisText("");
+      setLineAnalysisError("");
+      if (!entry.moves?.length) {
+        setLineAnalysisError("This line has no parsed moves to analyze.");
+        return;
+      }
+      if (!electronAPI?.askQuestion) {
+        setLineAnalysisError("LLM analysis API is unavailable.");
+        return;
+      }
+      setLineAnalysisLoading(true);
+      const moveSequence = entry.moves.map((move) => `${move.from}${move.to}`).join(" ");
+      const question = `You are a chess coach reviewing Stockfish output. Analyze the following move line on the current board (FEN: ${currentFen}). Each pair of coordinates is a move: the first pair is the piece's current square, the next pair is the destination. Highlight threats for both sides, weak areas, and how each player should proceed, including useful attacking and defending hints. Moves: ${moveSequence}`;
+      try {
+        const response = await electronAPI.askQuestion({
+          question,
+          fen: currentFen,
+          lines: analysisLines,
+          language: formState.explainLanguage,
+          model: formState.ollamaModel,
+          baseUrl: formState.ollamaBaseUrl
+        });
+        if (!response?.ok || !response.answer) {
+          setLineAnalysisError(response?.error || "LLM did not return any analysis.");
+        } else {
+          setLineAnalysisText(response.answer);
+        }
+      } catch (err) {
+        setLineAnalysisError("LLM analysis failed.");
+      } finally {
+        setLineAnalysisLoading(false);
+      }
+    },
+    [analysisLines, currentFen, electronAPI, formState.explainLanguage, formState.ollamaBaseUrl, formState.ollamaModel]
+  );
+
+  const handlePlayLine = useCallback(
+    (moves) => {
+      if (!moves?.length) {
+        setAnalysisStatus("No moves to replay.");
+        return;
+      }
+      const sequence = deriveFenSequence(moves, currentFen);
+      if (!sequence?.length) {
+        setAnalysisStatus("Unable to replay this line.");
+        return;
+      }
+      applyPositions(sequence, "Replayed analysis line.");
+    },
+    [applyPositions, currentFen]
+  );
+
+  const openImportPicker = useCallback(() => {
+    importFileInput.current?.click();
+  }, []);
+
+  const handleImportFile = useCallback((event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    if (typeof FileReader === "undefined") {
+      setImportError("File uploads are unavailable.");
+      return;
+    }
+    setImportLoading(true);
+    setImportError("");
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImportText(String(reader.result || ""));
+      setImportLoading(false);
+    };
+    reader.onerror = () => {
+      setImportError("Unable to read the selected file.");
+      setImportLoading(false);
+    };
+    reader.readAsText(file);
+    event.target.value = "";
+  }, []);
+
+  const handleImportSubmit = useCallback(() => {
+    const text = String(importText || "").trim();
+    if (!text) {
+      setImportError("Provide FEN or PGN text.");
+      return;
+    }
+    setImportLoading(true);
+    const result = parseFenOrPgnInput(text);
+    if (result.error) {
+      setImportError(result.error);
+      setImportLoading(false);
+      return;
+    }
+    setImportError("");
+    applyPositions(result.positions, "Imported positions applied.");
+    setImportDialogOpen(false);
+    setImportLoading(false);
+  }, [applyPositions, importText]);
 
   const handleQuestion = useCallback(async () => {
     const question = String(questionText || "").trim();
@@ -342,24 +469,15 @@ export default function App() {
     setViewMode("settings");
   }, []);
 
-  const analysisSummary = useMemo(() => {
-    return analysisLines.map((line) => ({
-      rank: line.rank,
-      score: formatScore(line.score),
-      pv: line.pv || "No PV available"
-    }));
-  }, [analysisLines]);
-
   const boardSize = useMemo(() => {
     const width = windowSize.width || 1280;
     const height = windowSize.height || 720;
     const horizontalPadding = 48;
     const verticalPadding = 96;
-    const leftWidth = Math.max(360, (width - horizontalPadding) * 0.7 - 24);
-    const leftHeight = Math.max(360, height - verticalPadding);
-    const paddedWidth = Math.max(0, leftWidth - 10);
-    const paddedHeight = Math.max(0, leftHeight - 10);
-    const dimension = Math.min(paddedWidth, paddedHeight, 760);
+    const usableWidth = Math.max(360, width - horizontalPadding);
+    const usableHeight = Math.max(360, height - verticalPadding);
+    const boardWidth = usableWidth * 0.6;
+    const dimension = Math.min(boardWidth, usableHeight, 760);
     return { width: dimension, height: dimension };
   }, [windowSize.width, windowSize.height]);
 
@@ -407,6 +525,7 @@ export default function App() {
               sx={{
                 flex: "7 1 0%",
                 minHeight: 0,
+                height: "100%",
                 display: "flex",
                 flexDirection: "column",
                 padding: "5px",
@@ -423,14 +542,14 @@ export default function App() {
                 />
               </Box>
               <Box sx={{ display: "flex", justifyContent: "flex-end", pt: 1 }}>
-                <IconButton
-                  size="small"
-                  onClick={() => setFenDialogOpen(true)}
-                  color="primary"
-                  aria-label="open FEN controls"
-                >
-                  <AddIcon fontSize="small" />
-                </IconButton>
+              <IconButton
+                size="small"
+                onClick={() => setImportDialogOpen(true)}
+                color="primary"
+                aria-label="open import controls"
+              >
+                <AddIcon fontSize="small" />
+              </IconButton>
               </Box>
             </Box>
             <Box
@@ -440,7 +559,9 @@ export default function App() {
                 display: "flex",
                 flexDirection: "column",
                 gap: 2,
-                minHeight: 0
+                minHeight: 0,
+                height: "100%",
+                overflow: "hidden"
               }}
             >
               <ChatPanel
@@ -451,58 +572,107 @@ export default function App() {
                 questionResponse={questionResponse}
                 onClearQuestion={() => setQuestionText("")}
                 onOpenSettings={onOpenSettings}
-                analysisLines={analysisSummary}
+                analysisEntries={analysisEntries}
                 analysisStatus={analysisStatus}
                 analysisLoading={analysisLoading}
+                onPlayLine={handlePlayLine}
+                onShowLine={handleShowLine}
                 sx={{ flex: 1 }}
               />
             </Box>
           </Box>
         </Stack>
       )}
-      <Dialog open={fenDialogOpen} onClose={() => setFenDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>FEN controls</DialogTitle>
+      <input
+        ref={importFileInput}
+        type="file"
+        accept=".fen,.pgn,text/plain"
+        style={{ display: "none" }}
+        onChange={handleImportFile}
+      />
+      <Dialog open={importDialogOpen} onClose={() => setImportDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Import FEN / PGN</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             <TextField
               multiline
-              minRows={3}
-              maxRows={6}
-              value={fenInput}
-              onChange={(event) => setFenInput(event.target.value)}
-              placeholder="Paste a FEN string or drag pieces to create one"
+              minRows={4}
+              maxRows={8}
+              value={importText}
+              onChange={(event) => {
+                setImportText(event.target.value);
+                if (importError) {
+                  setImportError("");
+                }
+              }}
+              placeholder="Paste a FEN or PGN string here (supports the same moves Stockfish reports)."
               fullWidth
             />
-            <Stack direction="row" spacing={1}>
-              <Button
-                variant="contained"
-                onClick={() => {
-                  handleApplyFen();
-                  setFenDialogOpen(false);
-                }}
-              >
-                Apply FEN
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={() => {
-                  handleResetToStart();
-                  setFenDialogOpen(false);
-                }}
-              >
-                Use start position
-              </Button>
-            </Stack>
             <Stack direction="row" spacing={1} alignItems="center">
-              {analysisLoading && <CircularProgress size={20} />}
+              <Button variant="outlined" onClick={openImportPicker}>
+                Browse file
+              </Button>
+              {importLoading && <CircularProgress size={18} />}
               <Typography variant="body2" color="text.secondary">
-                {analysisStatus}
+                Upload .fen/.pgn for batch positions
               </Typography>
             </Stack>
+            {importError && (
+              <Typography variant="body2" color="error">
+                {importError}
+              </Typography>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setFenDialogOpen(false)}>Close</Button>
+          <Button variant="contained" onClick={handleImportSubmit} disabled={importLoading}>
+            Load positions
+          </Button>
+          <Button variant="outlined" onClick={handleResetToStart}>
+            Reset board
+          </Button>
+          <Button onClick={() => setImportDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={lineDialogOpen} onClose={handleLineDialogClose} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {activeLine ? `Line ${activeLine.rank ?? ""} analysis` : "Line analysis"}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            {activeLine?.moves && activeLine.moves.length > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                Moves:{" "}
+                {activeLine.moves
+                  .map((move) => `${move.from.toUpperCase()} → ${move.to.toUpperCase()}`)
+                  .join(", ")}
+              </Typography>
+            )}
+            {activeLine?.rawText && (
+              <Typography variant="body2" color="text.secondary">
+                Source: {activeLine.rawText}
+              </Typography>
+            )}
+            {lineAnalysisLoading && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <CircularProgress size={20} />
+                <Typography variant="body2">Generating LLM analysis…</Typography>
+              </Box>
+            )}
+            {lineAnalysisError && (
+              <Typography variant="body2" color="error">
+                {lineAnalysisError}
+              </Typography>
+            )}
+            {lineAnalysisText && (
+              <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+                {lineAnalysisText}
+              </Typography>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleLineDialogClose}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>
