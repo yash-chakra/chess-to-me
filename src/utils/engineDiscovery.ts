@@ -1,6 +1,8 @@
+import type { EngineInfo } from "../types";
+
 const electronAPI = typeof window !== "undefined" ? window.electronAPI : null;
 
-export async function discoverEngines() {
+export async function discoverEngines(): Promise<{ stockfish: string | null; lc0: string | null }> {
   if (!electronAPI?.discoverEngines) {
     console.warn("Engine discovery API unavailable");
     return { stockfish: null, lc0: null };
@@ -13,12 +15,12 @@ export async function discoverEngines() {
       lc0: result?.lc0 || null
     };
   } catch (err) {
-    console.error(`Engine discovery failed: ${err.message}`);
+    console.error(`Engine discovery failed: ${err instanceof Error ? err.message : String(err)}`);
     return { stockfish: null, lc0: null };
   }
 }
 
-export async function detectEngine(engineName) {
+export async function detectEngine(engineName: string): Promise<string | null> {
   if (!electronAPI?.detectEngine) {
     return null;
   }
@@ -27,12 +29,12 @@ export async function detectEngine(engineName) {
     const result = await electronAPI.detectEngine({ engine: engineName });
     return result?.path || null;
   } catch (err) {
-    console.error(`Detection of ${engineName} failed: ${err.message}`);
+    console.error(`Detection of ${engineName} failed: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 }
 
-export async function validateEnginePath(engineName, path) {
+export async function validateEnginePath(engineName: string, path: string): Promise<boolean> {
   if (!electronAPI?.validateEngine) {
     return false;
   }
@@ -41,12 +43,12 @@ export async function validateEnginePath(engineName, path) {
     const result = await electronAPI.validateEngine({ engine: engineName, path });
     return result?.valid === true;
   } catch (err) {
-    console.error(`Validation of ${engineName} at ${path} failed: ${err.message}`);
+    console.error(`Validation of ${engineName} at ${path} failed: ${err instanceof Error ? err.message : String(err)}`);
     return false;
   }
 }
 
-export function getDefaultEngine(discoveredEngines) {
+export function getDefaultEngine(discoveredEngines: { stockfish: string | null; lc0: string | null }): string | null {
   if (discoveredEngines?.lc0) {
     return "lc0";
   }
@@ -56,8 +58,8 @@ export function getDefaultEngine(discoveredEngines) {
   return null;
 }
 
-export function getAvailableEngines(discoveredEngines) {
-  const available = [];
+export function getAvailableEngines(discoveredEngines: { stockfish: string | null; lc0: string | null }): EngineInfo[] {
+  const available: EngineInfo[] = [];
   if (discoveredEngines?.stockfish) {
     available.push({
       name: "stockfish",

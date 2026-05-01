@@ -1,7 +1,9 @@
+import { LC0Engine } from "./LC0Engine";
+
 describe("LC0Engine", () => {
-  let engine;
-  let mockElectronAPI;
-  let LC0Engine;
+  let engine: LC0Engine;
+  let mockElectronAPI: any;
+  let LC0EngineClass: typeof LC0Engine;
 
   beforeEach(async () => {
     jest.resetModules();
@@ -11,12 +13,12 @@ describe("LC0Engine", () => {
       analyzePosition: jest.fn(),
       stopEngine: jest.fn()
     };
-    global.window.electronAPI = mockElectronAPI;
+    (global as any).window.electronAPI = mockElectronAPI;
 
     const module = await import("./LC0Engine");
-    LC0Engine = module.LC0Engine;
+    LC0EngineClass = module.LC0Engine;
 
-    engine = new LC0Engine("/path/to/lc0");
+    engine = new LC0EngineClass("/path/to/lc0");
   });
 
   afterEach(() => {
@@ -92,9 +94,7 @@ describe("LC0Engine", () => {
       error: "Invalid FEN"
     });
 
-    await expect(
-      engine.analyze("invalid fen")
-    ).rejects.toThrow("Invalid FEN");
+    await expect(engine.analyze("invalid fen")).rejects.toThrow("Invalid FEN");
   });
 
   test("should throw error when analyzePosition API unavailable", async () => {
@@ -124,7 +124,7 @@ describe("LC0Engine", () => {
   });
 
   test("should handle missing stopEngine API during stop", async () => {
-    global.window.electronAPI = { stopEngine: null };
+    (global as any).window.electronAPI = { stopEngine: null };
 
     await expect(engine.stop()).resolves.toBeUndefined();
   });

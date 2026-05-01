@@ -1,10 +1,13 @@
+import {
+  discoverEngines,
+  detectEngine,
+  validateEnginePath,
+  getDefaultEngine,
+  getAvailableEngines
+} from "./engineDiscovery";
+
 describe("Engine Discovery", () => {
-  let mockElectronAPI;
-  let discoverEngines,
-    detectEngine,
-    validateEnginePath,
-    getDefaultEngine,
-    getAvailableEngines;
+  let mockElectronAPI: any;
 
   beforeEach(async () => {
     jest.resetModules();
@@ -14,14 +17,7 @@ describe("Engine Discovery", () => {
       detectEngine: jest.fn(),
       validateEngine: jest.fn()
     };
-    global.window.electronAPI = mockElectronAPI;
-
-    const module = await import("./engineDiscovery");
-    discoverEngines = module.discoverEngines;
-    detectEngine = module.detectEngine;
-    validateEnginePath = module.validateEnginePath;
-    getDefaultEngine = module.getDefaultEngine;
-    getAvailableEngines = module.getAvailableEngines;
+    (global as any).window.electronAPI = mockElectronAPI;
   });
 
   afterEach(() => {
@@ -87,7 +83,7 @@ describe("Engine Discovery", () => {
     });
 
     test("should return defaults when API unavailable", async () => {
-      global.window.electronAPI = null;
+      (global as any).window.electronAPI = null;
 
       const result = await discoverEngines();
 
@@ -160,7 +156,7 @@ describe("Engine Discovery", () => {
     });
 
     test("should return null when API unavailable", async () => {
-      global.window.electronAPI = null;
+      (global as any).window.electronAPI = null;
 
       const result = await detectEngine("stockfish");
 
@@ -202,7 +198,7 @@ describe("Engine Discovery", () => {
     });
 
     test("should return false when API unavailable", async () => {
-      global.window.electronAPI = null;
+      (global as any).window.electronAPI = null;
 
       const result = await validateEnginePath("stockfish", "/usr/bin/stockfish");
 
@@ -272,13 +268,13 @@ describe("Engine Discovery", () => {
     });
 
     test("should return null for empty object", () => {
-      const result = getDefaultEngine({});
+      const result = getDefaultEngine({} as any);
 
       expect(result).toBeNull();
     });
 
     test("should return null for null input", () => {
-      const result = getDefaultEngine(null);
+      const result = getDefaultEngine(null as any);
 
       expect(result).toBeNull();
     });
@@ -353,13 +349,13 @@ describe("Engine Discovery", () => {
     });
 
     test("should return empty array for null input", () => {
-      const result = getAvailableEngines(null);
+      const result = getAvailableEngines(null as any);
 
       expect(result).toEqual([]);
     });
 
     test("should return empty array for empty object", () => {
-      const result = getAvailableEngines({});
+      const result = getAvailableEngines({} as any);
 
       expect(result).toEqual([]);
     });

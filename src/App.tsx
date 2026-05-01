@@ -9,10 +9,8 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   IconButton,
   LinearProgress,
-  Paper,
   Stack,
   Tab,
   Tabs,
@@ -32,11 +30,20 @@ import {
   parseFenOrPgnInput,
   parseStockfishLine
 } from "./utils/analysisHelpers";
+import type {
+  AnalysisEntry,
+  AnalysisLine,
+  AppSettings,
+  EngineInfo,
+  EngineStatus,
+  LogEntry,
+  SystemStatus
+} from "./types";
 
 const electronAPI = typeof window !== "undefined" ? window.electronAPI : null;
 const SETTINGS_FLAG = "chess-to-me:settings-saved";
 
-const DEFAULT_FORM = {
+const DEFAULT_FORM: AppSettings = {
   stockfishPath: "",
   lc0Path: "",
   selectedEngine: "lc0",
@@ -46,14 +53,14 @@ const DEFAULT_FORM = {
   ollamaBaseUrl: "http://localhost:11434/api"
 };
 
-const normalizeModelName = (value) => String(value || "").trim();
+const normalizeModelName = (value: string | null | undefined): string => String(value || "").trim();
 
-const normalizeModelList = (models) => {
+const normalizeModelList = (models: string[] | null | undefined): string[] => {
   if (!Array.isArray(models)) {
     return [];
   }
-  const seen = new Set();
-  const normalized = [];
+  const seen = new Set<string>();
+  const normalized: string[] = [];
   for (const model of models) {
     const candidate = normalizeModelName(model);
     if (!candidate) {
@@ -69,7 +76,7 @@ const normalizeModelList = (models) => {
   return normalized;
 };
 
-const determinePreferredModel = (models) => {
+const determinePreferredModel = (models: string[] | null | undefined): string => {
   const normalized = normalizeModelList(models);
   const defaultName = DEFAULT_FORM.ollamaModel;
   const defaultKey = defaultName.toLowerCase();
@@ -80,50 +87,49 @@ const determinePreferredModel = (models) => {
 };
 
 export default function App() {
-  const [viewMode, setViewMode] = useState(() => {
+  const [viewMode, setViewMode] = useState<"settings" | "analysis">(() => {
     if (typeof window === "undefined") return "settings";
     return window.localStorage.getItem(SETTINGS_FLAG) === "true" ? "analysis" : "settings";
   });
-  const [formState, setFormState] = useState(DEFAULT_FORM);
-  const [engineStatus, setEngineStatus] = useState(null);
-  const [systemStatus, setSystemStatus] = useState(null);
-  const [statusMessage, setStatusMessage] = useState("");
-  const [settingsSaving, setSettingsSaving] = useState(false);
-  const [analysisLoading, setAnalysisLoading] = useState(false);
-  const [analysisStatus, setAnalysisStatus] = useState("");
-  const [analysisLines, setAnalysisLines] = useState([]);
-  const [analysisEntries, setAnalysisEntries] = useState([]);
-  const [selectedAnalysisLineId, setSelectedAnalysisLineId] = useState(null);
-  const [analysisMode, setAnalysisMode] = useState("main");
-  const [logEntries, setLogEntries] = useState({ stockfish: [], ollama: [] });
-  const [logLoading, setLogLoading] = useState(false);
-  const [analysisLogError, setAnalysisLogError] = useState("");
-  const [activeLogTab, setActiveLogTab] = useState(0);
-  const logContainerRefs = useRef({ stockfish: null, ollama: null });
-  const [appLoading, setAppLoading] = useState(true);
-  const [lineDialogOpen, setLineDialogOpen] = useState(false);
-  const [activeLine, setActiveLine] = useState(null);
-  const [lineAnalysisText, setLineAnalysisText] = useState("");
-  const [lineAnalysisLoading, setLineAnalysisLoading] = useState(false);
-  const [lineAnalysisError, setLineAnalysisError] = useState("");
-  const [explanations, setExplanations] = useState([]);
-  const [currentFen, setCurrentFen] = useState("start");
-  const [questionText, setQuestionText] = useState("");
-  const [questionResponse, setQuestionResponse] = useState("");
-  const [questionLoading, setQuestionLoading] = useState(false);
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [importText, setImportText] = useState("start");
-  const [importError, setImportError] = useState("");
-  const [importLoading, setImportLoading] = useState(false);
-  const [windowSize, setWindowSize] = useState(() => ({
+  const [formState, setFormState] = useState<AppSettings>(DEFAULT_FORM);
+  const [engineStatus, setEngineStatus] = useState<EngineStatus | null>(null);
+  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string>("");
+  const [settingsSaving, setSettingsSaving] = useState<boolean>(false);
+  const [analysisLoading, setAnalysisLoading] = useState<boolean>(false);
+  const [analysisStatus, setAnalysisStatus] = useState<string>("");
+  const [analysisLines, setAnalysisLines] = useState<AnalysisLine[]>([]);
+  const [analysisEntries, setAnalysisEntries] = useState<AnalysisEntry[]>([]);
+  const [selectedAnalysisLineId, setSelectedAnalysisLineId] = useState<string | null>(null);
+  const [analysisMode, setAnalysisMode] = useState<"main" | "logs">("main");
+  const [logEntries, setLogEntries] = useState<{ stockfish: LogEntry[]; ollama: LogEntry[] }>({ stockfish: [], ollama: [] });
+  const [logLoading, setLogLoading] = useState<boolean>(false);
+  const [analysisLogError, setAnalysisLogError] = useState<string>("");
+  const [activeLogTab, setActiveLogTab] = useState<number>(0);
+  const logContainerRefs = useRef<{ stockfish: HTMLDivElement | null; ollama: HTMLDivElement | null }>({ stockfish: null, ollama: null });
+  const [appLoading, setAppLoading] = useState<boolean>(true);
+  const [lineDialogOpen, setLineDialogOpen] = useState<boolean>(false);
+  const [activeLine, setActiveLine] = useState<AnalysisEntry | null>(null);
+  const [lineAnalysisText, setLineAnalysisText] = useState<string>("");
+  const [lineAnalysisLoading, setLineAnalysisLoading] = useState<boolean>(false);
+  const [lineAnalysisError, setLineAnalysisError] = useState<string>("");
+  const [currentFen, setCurrentFen] = useState<string>("start");
+  const [questionText, setQuestionText] = useState<string>("");
+  const [questionResponse, setQuestionResponse] = useState<string>("");
+  const [questionLoading, setQuestionLoading] = useState<boolean>(false);
+  const [importDialogOpen, setImportDialogOpen] = useState<boolean>(false);
+  const [importText, setImportText] = useState<string>("start");
+  const [importError, setImportError] = useState<string>("");
+  const [importLoading, setImportLoading] = useState<boolean>(false);
+  const [windowSize, setWindowSize] = useState<{ width: number; height: number }>(() => ({
     width: typeof window !== "undefined" ? window.innerWidth : 1280,
     height: typeof window !== "undefined" ? window.innerHeight : 720
   }));
-  const [availableEngines, setAvailableEngines] = useState([]);
-  const importFileInput = useRef(null);
-  const userSelectedModelRef = useRef(false);
+  const [availableEngines, setAvailableEngines] = useState<EngineInfo[]>([]);
+  const importFileInput = useRef<HTMLInputElement>(null);
+  const userSelectedModelRef = useRef<boolean>(false);
 
-  const fetchSystemStatus = useCallback(async () => {
+  const fetchSystemStatus = useCallback(async (): Promise<void> => {
     if (!electronAPI?.getSystemStatus) {
       return;
     }
@@ -131,7 +137,7 @@ export default function App() {
       const status = await electronAPI.getSystemStatus();
       setSystemStatus(status);
 
-      const engines = [];
+      const engines: EngineInfo[] = [];
       if (status.stockfishFound) {
         engines.push({
           name: "stockfish",
@@ -171,7 +177,7 @@ export default function App() {
     }
   }, []);
 
-  const loadEngineStatus = useCallback(async () => {
+  const loadEngineStatus = useCallback(async (): Promise<void> => {
     if (!electronAPI?.getEngineStatus) {
       return;
     }
@@ -182,7 +188,7 @@ export default function App() {
         ...prev,
         stockfishPath: status.stockfishPath || prev.stockfishPath,
         lc0Path: status.lc0Path || prev.lc0Path,
-        selectedEngine: status.selectedEngine || prev.selectedEngine,
+        selectedEngine: (status.selectedEngine as "stockfish" | "lc0") || prev.selectedEngine,
         analysisDepth: Number(status.settings?.analysisDepth) || prev.analysisDepth,
         explainLanguage: status.settings?.explainLanguage || prev.explainLanguage,
         ollamaModel: status.settings?.ollamaModel || prev.ollamaModel,
@@ -194,7 +200,7 @@ export default function App() {
     }
   }, []);
 
-  const loadLogs = useCallback(async () => {
+  const loadLogs = useCallback(async (): Promise<void> => {
     if (!electronAPI?.getProcessLogs) {
       setAnalysisLogError("Log interface unavailable.");
       setLogEntries({ stockfish: [], ollama: [] });
@@ -289,45 +295,39 @@ export default function App() {
   }, [analysisMode, activeLogTab, logEntries]);
 
   const fetchExplanations = useCallback(
-    async (fen, lines) => {
+    async (fen: string, lines: AnalysisLine[]): Promise<void> => {
       if (!lines?.length || !electronAPI?.explainLines) {
-        setExplanations([]);
         return;
       }
       try {
-        const response = await electronAPI.explainLines({
+        await electronAPI.explainLines({
           fen,
           lines,
           language: formState.explainLanguage,
           model: formState.ollamaModel,
           baseUrl: formState.ollamaBaseUrl
         });
-        if (response?.ok) {
-          setExplanations(response.explanations || []);
-        } else {
-          setExplanations([]);
-        }
       } catch (err) {
-        setExplanations([]);
+        // Handle error silently
       }
     },
     [formState.explainLanguage, formState.ollamaModel, formState.ollamaBaseUrl]
   );
 
   const handleAnalysisSuccess = useCallback(
-    (lines, fen) => {
+    (lines: AnalysisLine[], fen: string): void => {
       setAnalysisLines(lines);
-    const entries = (lines || []).map((line, index) =>
-      parseStockfishLine(line, index + 1, currentFen)
-    );
+      const entries = (lines || []).map((line, index) =>
+        parseStockfishLine(line, index + 1, currentFen)
+      );
       setAnalysisEntries(entries);
       setAnalysisStatus("");
       fetchExplanations(fen, lines);
     },
-    [fetchExplanations]
+    [fetchExplanations, currentFen]
   );
 
-  const handleSelectAnalysisLine = useCallback((entry) => {
+  const handleSelectAnalysisLine = useCallback((entry: AnalysisEntry): void => {
     if (!entry) {
       setSelectedAnalysisLineId(null);
       return;
@@ -336,7 +336,7 @@ export default function App() {
   }, []);
 
   const runAnalysis = useCallback(
-    async (fen) => {
+    async (fen: string): Promise<void> => {
       if (!electronAPI?.analyzePosition) {
         setAnalysisStatus("Analysis engine unavailable.");
         return;
@@ -350,20 +350,18 @@ export default function App() {
           multiPv: 4
         });
         if (!response?.ok) {
-          setAnalysisStatus(response?.error || "Stockfish failed to return analysis.");
+          setAnalysisStatus((response as any)?.error || "Stockfish failed to return analysis.");
           setAnalysisLines([]);
           setAnalysisEntries([]);
-          setExplanations([]);
-          return;
+              return;
         }
-        const lines = response.analysis?.lines || [];
+        const lines = (response as any).analysis?.lines || [];
         handleAnalysisSuccess(lines, fen);
       } catch (err) {
         setAnalysisStatus("Stockfish analysis failed.");
         setAnalysisLines([]);
         setAnalysisEntries([]);
-        setExplanations([]);
-      } finally {
+        } finally {
         setAnalysisLoading(false);
       }
     },
@@ -371,7 +369,7 @@ export default function App() {
   );
 
   const applyPositions = useCallback(
-    (positions, message) => {
+    (positions: string[], message?: string): void => {
       if (!positions?.length) {
         setAnalysisStatus("No valid positions found.");
         return;
@@ -387,13 +385,13 @@ export default function App() {
   );
 
   const handleFormChange = useCallback(
-    (key, value) => {
+    (key: string, value: string | number): void => {
       if (key === "ollamaModel") {
         userSelectedModelRef.current = true;
       }
       setFormState((prev) => ({ ...prev, [key]: value }));
       if (key === "ollamaModel" && electronAPI?.setOllamaModel) {
-        const selected = value || DEFAULT_FORM.ollamaModel;
+        const selected = String(value) || DEFAULT_FORM.ollamaModel;
         setStatusMessage(`Switching to ${selected}...`);
         electronAPI
           .setOllamaModel(selected)
@@ -405,10 +403,10 @@ export default function App() {
           });
       }
     },
-    [setStatusMessage]
+    []
   );
 
-  const handleDetect = useCallback(async () => {
+  const handleDetect = useCallback(async (): Promise<void> => {
     const selectedEngine = formState.selectedEngine || "lc0";
     if (!electronAPI?.detectEngine) {
       setStatusMessage("Auto-detect is unavailable.");
@@ -428,7 +426,7 @@ export default function App() {
     }
   }, [formState.selectedEngine]);
 
-  const handleBrowse = useCallback(async () => {
+  const handleBrowse = useCallback(async (): Promise<void> => {
     const selectedEngine = formState.selectedEngine || "lc0";
     if (!electronAPI?.browseForEngine) {
       setStatusMessage("Browse dialog unavailable.");
@@ -444,16 +442,16 @@ export default function App() {
         setStatusMessage("Selected file is not a valid engine.");
         return;
       }
-      setFormState((prev) => ({ ...prev, [`${selectedEngine}Path`]: response.path || prev[`${selectedEngine}Path`] }));
+      setFormState((prev) => ({ ...prev, [`${selectedEngine}Path`]: response.path || prev[`${selectedEngine}Path` as keyof AppSettings] }));
       setStatusMessage(`${selectedEngine.toUpperCase()} executable selected.`);
     } catch (err) {
       setStatusMessage(`Unable to browse for ${selectedEngine.toUpperCase()}.`);
     }
   }, [formState.selectedEngine]);
 
-  const handleSaveSettings = useCallback(async () => {
+  const handleSaveSettings = useCallback(async (): Promise<void> => {
     const selectedEngine = formState.selectedEngine || "lc0";
-    const selectedPath = formState[`${selectedEngine}Path`];
+    const selectedPath = formState[`${selectedEngine}Path` as keyof AppSettings];
 
     if (!selectedPath) {
       setStatusMessage(`Please provide a ${selectedEngine.toUpperCase()} executable path.`);
@@ -468,15 +466,15 @@ export default function App() {
     try {
       const pathResult = await electronAPI.setEnginePath({
         engine: selectedEngine,
-        path: selectedPath
+        path: String(selectedPath)
       });
       if (!pathResult?.ok) {
         setStatusMessage(`${selectedEngine.toUpperCase()} path validation failed.`);
         return;
       }
       const configResult = await electronAPI.updateAppSettings({
-        selectedEngine,
-        [`${selectedEngine}Path`]: selectedPath,
+        selectedEngine: selectedEngine as "stockfish" | "lc0",
+        [`${selectedEngine}Path`]: String(selectedPath),
         analysisDepth: Number(formState.analysisDepth),
         explainLanguage: formState.explainLanguage,
         ollamaModel: formState.ollamaModel,
@@ -487,11 +485,11 @@ export default function App() {
         return;
       }
       setEngineStatus((prev) => ({
-        ...prev,
+        ...prev!,
         configured: true,
         selectedEngine,
-        [`${selectedEngine}Path`]: selectedPath,
-        settings: configResult.settings
+        [`${selectedEngine}Path`]: String(selectedPath),
+        settings: (configResult as any).settings
       }));
       setStatusMessage(`Settings saved and ${selectedEngine.toUpperCase()} validated.`);
       fetchSystemStatus();
@@ -502,15 +500,15 @@ export default function App() {
     }
   }, [fetchSystemStatus, formState]);
 
-  const handleEngineChange = useCallback((engineName) => {
+  const handleEngineChange = useCallback((engineName: string): void => {
     setFormState((prev) => ({
       ...prev,
-      selectedEngine: engineName
+      selectedEngine: engineName as "stockfish" | "lc0"
     }));
     setStatusMessage(`Switched to ${engineName.toUpperCase()}.`);
   }, []);
 
-  const handleSettingsComplete = useCallback(() => {
+  const handleSettingsComplete = useCallback((): void => {
     const selectedEngine = formState.selectedEngine || "lc0";
     if (!engineStatus?.configured) {
       setStatusMessage(`Please configure ${selectedEngine.toUpperCase()} before entering the analysis view.`);
@@ -522,13 +520,13 @@ export default function App() {
     }
   }, [engineStatus, formState.selectedEngine]);
 
-  const handleResetToStart = useCallback(() => {
+  const handleResetToStart = useCallback((): void => {
     setImportText("start");
     setAnalysisStatus("");
     applyPositions(["start"], "Start position loaded.");
   }, [applyPositions]);
 
-  const handleLineDialogClose = useCallback(() => {
+  const handleLineDialogClose = useCallback((): void => {
     setLineDialogOpen(false);
     setActiveLine(null);
     setLineAnalysisText("");
@@ -536,7 +534,7 @@ export default function App() {
   }, []);
 
   const handleShowLine = useCallback(
-    async (entry) => {
+    async (entry: AnalysisEntry | null): Promise<void> => {
       if (!entry) {
         return;
       }
@@ -565,7 +563,7 @@ export default function App() {
           baseUrl: formState.ollamaBaseUrl
         });
         if (!response?.ok || !response.answer) {
-          const fallback = response?.error || "LLM did not return any analysis.";
+          const fallback = (response as any)?.error || "LLM did not return any analysis.";
           setLineAnalysisError(`${fallback} (ensure Ollama is reachable at ${formState.ollamaBaseUrl})`);
         } else {
           setLineAnalysisText(response.answer);
@@ -576,10 +574,10 @@ export default function App() {
         setLineAnalysisLoading(false);
       }
     },
-    [analysisLines, currentFen, electronAPI, formState.explainLanguage, formState.ollamaBaseUrl, formState.ollamaModel]
+    [analysisLines, currentFen, formState.explainLanguage, formState.ollamaBaseUrl, formState.ollamaModel]
   );
 
-  const handleAnalysisIconClick = useCallback(() => {
+  const handleAnalysisIconClick = useCallback((): void => {
     const selectedEntry = analysisEntries.find((entry) => entry.id === selectedAnalysisLineId);
     if (!selectedEntry) {
       setStatusMessage("Select an analysis line before showing the LLM output.");
@@ -604,11 +602,11 @@ export default function App() {
     [applyPositions, currentFen]
   );
 
-  const openImportPicker = useCallback(() => {
+  const openImportPicker = useCallback((): void => {
     importFileInput.current?.click();
   }, []);
 
-  const handleImportFile = useCallback((event) => {
+  const handleImportFile = useCallback((event: React.ChangeEvent<HTMLInputElement>): void => {
     const file = event.target.files?.[0];
     if (!file) {
       return;
@@ -632,7 +630,7 @@ export default function App() {
     event.target.value = "";
   }, []);
 
-  const handleImportSubmit = useCallback(() => {
+  const handleImportSubmit = useCallback((): void => {
     const text = String(importText || "").trim();
     if (!text) {
       setImportError("Provide FEN or PGN text.");
@@ -640,7 +638,7 @@ export default function App() {
     }
     setImportLoading(true);
     const result = parseFenOrPgnInput(text);
-    if (result.error) {
+    if ("error" in result) {
       setImportError(result.error);
       setImportLoading(false);
       return;
@@ -651,7 +649,7 @@ export default function App() {
     setImportLoading(false);
   }, [applyPositions, importText]);
 
-  const handleQuestion = useCallback(async () => {
+  const handleQuestion = useCallback(async (): Promise<void> => {
     const question = String(questionText || "").trim();
     if (!question) {
       setStatusMessage("Ask a question about the current position.");
@@ -673,7 +671,7 @@ export default function App() {
         baseUrl: formState.ollamaBaseUrl
       });
       if (!response?.ok) {
-        setStatusMessage(response?.error || "No response from LLM.");
+        setStatusMessage((response as any)?.error || "No response from LLM.");
         return;
       }
       setQuestionResponse(response.answer || "No answer returned.");
@@ -692,7 +690,7 @@ export default function App() {
     questionText
   ]);
 
-  const onOpenSettings = useCallback(() => {
+  const onOpenSettings = useCallback((): void => {
     setViewMode("settings");
   }, []);
 
@@ -841,7 +839,9 @@ export default function App() {
                 }}
               >
                 <Box
-                  ref={(node) => (logContainerRefs.current.stockfish = node)}
+                  ref={(node: HTMLDivElement | null) => {
+                    if (node) logContainerRefs.current.stockfish = node;
+                  }}
                   sx={{
                     flex: 1,
                     minHeight: 0,
@@ -880,7 +880,9 @@ export default function App() {
                   )}
                 </Box>
                 <Box
-                  ref={(node) => (logContainerRefs.current.ollama = node)}
+                  ref={(node: HTMLDivElement | null) => {
+                    if (node) logContainerRefs.current.ollama = node;
+                  }}
                   sx={{
                     flex: 1,
                     minHeight: 0,

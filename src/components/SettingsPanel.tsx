@@ -1,6 +1,5 @@
 import {
   Alert,
-  Box,
   Button,
   Chip,
   FormControl,
@@ -13,6 +12,11 @@ import {
   TextField,
   Typography
 } from "@mui/material";
+import type { SettingsPanelProps } from "../types";
+
+function getEnginePath(formState: Record<string, any>, engineName: string): string {
+  return formState[`${engineName}Path`] || "";
+}
 
 export default function SettingsPanel({
   formState,
@@ -29,24 +33,24 @@ export default function SettingsPanel({
   availableEngines,
   selectedEngine,
   onEngineChange
-}) {
+}: SettingsPanelProps) {
   const systemChips = [
-    { label: `Platform: ${systemStatus?.platform || "unknown"}`, color: "default" },
+    { label: `Platform: ${systemStatus?.platform || "unknown"}`, color: "default" as const },
     {
       label: systemStatus?.ollamaRunning ? "Ollama serve running" : "Ollama offline",
-      color: systemStatus?.ollamaRunning ? "success" : "error"
+      color: systemStatus?.ollamaRunning ? ("success" as const) : ("error" as const)
     },
     {
       label: systemStatus?.ollamaRunActive ? "Ollama model active" : "Ollama model idle",
-      color: systemStatus?.ollamaRunActive ? "success" : "warning"
+      color: systemStatus?.ollamaRunActive ? ("success" as const) : ("warning" as const)
     },
     {
       label: `Model: ${systemStatus?.activeModel || formState.ollamaModel}`,
-      color: "default"
+      color: "default" as const
     },
     {
       label: systemStatus?.qwen3Installed ? "qwen3 ready" : "qwen3 missing",
-      color: systemStatus?.qwen3Installed ? "success" : "error"
+      color: systemStatus?.qwen3Installed ? ("success" as const) : ("error" as const)
     }
   ];
   const availableModelList = Array.isArray(systemStatus?.availableModels)
@@ -93,7 +97,7 @@ export default function SettingsPanel({
           </Select>
           {selectedEngineFound ? (
             <Typography variant="caption" color="success.main" sx={{ mt: 1 }}>
-              ✓ Auto-detected at {formState[`${selectedEngine}Path`]}
+              ✓ Auto-detected at {getEnginePath(formState, selectedEngine || "")}
             </Typography>
           ) : (
             <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
@@ -106,7 +110,7 @@ export default function SettingsPanel({
           <>
             <TextField
               label={`${selectedEngine?.toUpperCase() || "Engine"} executable path`}
-              value={formState[`${selectedEngine}Path`] || ""}
+              value={getEnginePath(formState, selectedEngine || "")}
               onChange={(event) => onFieldChange?.(`${selectedEngine}Path`, event.target.value)}
               fullWidth
               helperText="Path to engine binary (e.g., /usr/local/bin/lc0 or C:\\Program Files\\LC0\\lc0.exe)"

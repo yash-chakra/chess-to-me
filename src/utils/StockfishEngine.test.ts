@@ -1,7 +1,9 @@
+import { StockfishEngine } from "./StockfishEngine";
+
 describe("StockfishEngine", () => {
-  let engine;
-  let mockElectronAPI;
-  let StockfishEngine;
+  let engine: StockfishEngine;
+  let mockElectronAPI: any;
+  let StockfishEngineClass: typeof StockfishEngine;
 
   beforeEach(async () => {
     jest.resetModules();
@@ -11,12 +13,12 @@ describe("StockfishEngine", () => {
       analyzePosition: jest.fn(),
       stopEngine: jest.fn()
     };
-    global.window.electronAPI = mockElectronAPI;
+    (global as any).window.electronAPI = mockElectronAPI;
 
     const module = await import("./StockfishEngine");
-    StockfishEngine = module.StockfishEngine;
+    StockfishEngineClass = module.StockfishEngine;
 
-    engine = new StockfishEngine("/path/to/stockfish");
+    engine = new StockfishEngineClass("/path/to/stockfish");
   });
 
   afterEach(() => {
@@ -92,9 +94,7 @@ describe("StockfishEngine", () => {
       error: "Invalid FEN"
     });
 
-    await expect(
-      engine.analyze("invalid fen")
-    ).rejects.toThrow("Invalid FEN");
+    await expect(engine.analyze("invalid fen")).rejects.toThrow("Invalid FEN");
   });
 
   test("should throw error when analyzePosition API unavailable", async () => {
@@ -124,7 +124,7 @@ describe("StockfishEngine", () => {
   });
 
   test("should handle missing stopEngine API during stop", async () => {
-    global.window.electronAPI = { stopEngine: null };
+    (global as any).window.electronAPI = { stopEngine: null };
 
     await expect(engine.stop()).resolves.toBeUndefined();
   });

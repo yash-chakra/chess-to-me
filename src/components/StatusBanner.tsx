@@ -1,6 +1,7 @@
 import { Alert, Stack } from "@mui/material";
+import type { StatusBannerProps } from "../types";
 
-export default function StatusBanner({ statusMessage, analysisStatus }) {
+export default function StatusBanner({ statusMessage, analysisStatus }: StatusBannerProps) {
   if (!statusMessage && !analysisStatus) {
     return null;
   }

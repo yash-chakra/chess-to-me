@@ -26,6 +26,7 @@
     "noFallthroughCasesInSwitch": true,
     "allowJs": true,
     "checkJs": false,
+    "types": ["jest", "node"],
 
     /* Path aliases */
     "baseUrl": ".",

@@ -12,8 +12,9 @@ import {
 import SettingsIcon from "@mui/icons-material/Settings";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import { useMemo } from "react";
+import type { ChatPanelProps } from "../types";
 
-const sanitizeHtml = (html) => {
+const sanitizeHtml = (html: string | null | undefined): string => {
   if (!html) {
     return "";
   }
@@ -41,7 +42,7 @@ export default function ChatPanel({
   selectedAnalysisId,
   onLineSelect,
   sx
-}) {
+}: ChatPanelProps) {
   const paperSx = Array.isArray(sx) ? sx : sx ? [sx] : [];
   const responseHtml = sanitizeHtml(questionResponse);
 

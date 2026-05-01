@@ -263,6 +263,12 @@ export interface ElectronAPI {
   setEnginePath(options: { engine: string; path: string }): Promise<{ ok: boolean; path?: string }>;
   getEngineStatus(): Promise<EngineStatus>;
 
+  // Engine operations (internal use)
+  ensureEngineRunning(options: { engine: string; path: string }): Promise<void>;
+  stopEngine(options: { engine: string }): Promise<void>;
+  discoverEngines(): Promise<{ stockfish: string | null; lc0: string | null }>;
+  validateEngine(options: { engine: string; path: string }): Promise<{ valid: boolean }>;
+
   // Analysis
   analyzePosition(payload: {
     engine?: string;

@@ -1,25 +1,31 @@
 import { StockfishEngine } from "./StockfishEngine";
 import { LC0Engine } from "./LC0Engine";
+import { IChessEngine } from "./ChessEngine";
+import type { AnalysisResult } from "../types";
 
 export class EngineRouter {
-  constructor(selectedEngine, enginePaths) {
-    this.selectedEngine = selectedEngine || "lc0";
-    this.enginePaths = enginePaths || {};
+  selectedEngine: string;
+  enginePaths: Record<string, string>;
+  currentEngine: IChessEngine | null;
+
+  constructor(selectedEngine: string = "lc0", enginePaths: Record<string, string> = {}) {
+    this.selectedEngine = selectedEngine;
+    this.enginePaths = enginePaths;
     this.currentEngine = null;
   }
 
-  setSelectedEngine(engineName, path) {
+  setSelectedEngine(engineName: string, path?: string): void {
     this.selectedEngine = engineName;
     if (path) {
       this.enginePaths[engineName] = path;
     }
   }
 
-  setEnginePaths(paths) {
+  setEnginePaths(paths: Record<string, string>): void {
     this.enginePaths = { ...this.enginePaths, ...paths };
   }
 
-  _createEngine(engineName) {
+  private _createEngine(engineName: string): IChessEngine {
     const path = this.enginePaths[engineName];
     if (!path) {
       throw new Error(`No path configured for engine: ${engineName}`);
@@ -35,12 +41,12 @@ export class EngineRouter {
     }
   }
 
-  async switchEngine(engineName, path) {
+  async switchEngine(engineName: string, path?: string): Promise<void> {
     if (this.currentEngine) {
       try {
         await this.currentEngine.destroy();
       } catch (err) {
-        console.error(`Error destroying previous engine: ${err.message}`);
+        console.error(`Error destroying previous engine: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 
@@ -55,27 +61,31 @@ export class EngineRouter {
     }
   }
 
-  async analyze(fen, depth, multiPv) {
+  async analyze(fen: string, depth?: number, multiPv?: number): Promise<AnalysisResult> {
     if (!this.currentEngine) {
       throw new Error("No engine currently initialized");
     }
     return this.currentEngine.analyze(fen, depth, multiPv);
   }
 
-  async stop() {
+  async stop(): Promise<void> {
     if (this.currentEngine) {
       await this.currentEngine.stop();
     }
   }
 
-  async destroy() {
+  async destroy(): Promise<void> {
     if (this.currentEngine) {
       await this.currentEngine.destroy();
       this.currentEngine = null;
     }
   }
 
-  getStatus() {
+  getStatus(): {
+    selectedEngine: string;
+    engineRunning: boolean;
+    currentEngineStatus: ReturnType<IChessEngine['getStatus']> | null;
+  } {
     return {
       selectedEngine: this.selectedEngine,
       engineRunning: !!this.currentEngine,

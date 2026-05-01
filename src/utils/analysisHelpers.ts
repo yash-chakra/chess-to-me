@@ -1,7 +1,8 @@
 import { Chess } from "chess.js";
+import type { AnalysisLine, AnalysisEntry, Move } from "../types";
 
 const coordinateRegex = /[a-h][1-8]/gi;
-const pieceNames = {
+const pieceNames: Record<string, string> = {
   p: "Pawn",
   r: "Rook",
   n: "Knight",
@@ -9,11 +10,12 @@ const pieceNames = {
   q: "Queen",
   k: "King"
 };
-const colorNames = {
+const colorNames: Record<string, string> = {
   w: "White",
   b: "Black"
 };
-const cleanNoise = (text) => {
+
+const cleanNoise = (text: string | null | undefined): string => {
   if (!text) {
     return "";
   }
@@ -25,14 +27,20 @@ const cleanNoise = (text) => {
     .trim();
 };
 
-const formatMoves = (moves) => {
+const formatMoves = (moves: Move[]): string => {
   if (!moves?.length) {
     return "No moves detected";
   }
   return moves.map((move) => `${move.from} ${move.to}`).join(", ");
 };
 
-const describeMovesForLlm = ({ moves, startingFen = "start" }) => {
+const describeMovesForLlm = ({
+  moves,
+  startingFen = "start"
+}: {
+  moves: Move[];
+  startingFen?: string;
+}): string => {
   const board = new Chess();
   if (startingFen && startingFen !== "start") {
     try {
@@ -45,7 +53,15 @@ const describeMovesForLlm = ({ moves, startingFen = "start" }) => {
   }
   const attackColor = board.turn() === "w" ? "White" : "Black";
   const defenderColor = attackColor === "White" ? "Black" : "White";
-  const moveDetails = [];
+  const moveDetails: Array<{
+    colorName: string;
+    pieceName: string;
+    from: string;
+    to: string;
+    san: string;
+    isCapture: boolean;
+  }> = [];
+
   for (const move of moves || []) {
     const moveResult = board.move({ from: move.from, to: move.to, promotion: "q" });
     if (!moveResult) {
@@ -60,6 +76,7 @@ const describeMovesForLlm = ({ moves, startingFen = "start" }) => {
       isCapture: (moveResult.flags || "").includes("c")
     });
   }
+
   const movesLine = (moves || []).map((move) => `${move.from}${move.to}`).join(" ") || "none";
   const first = moveDetails[0];
   const riskText = first
@@ -71,6 +88,7 @@ const describeMovesForLlm = ({ moves, startingFen = "start" }) => {
   const opponentIdea = first
     ? `${defenderColor} should reply by contesting ${first.to} or reinforcing the ${first.to} square with another piece.`
     : `${defenderColor} should finish development and challenge the newly opened files.`;
+
   return [
     `Position FEN: ${startingFen}`,
     `Moves: ${movesLine}`,
@@ -80,12 +98,17 @@ const describeMovesForLlm = ({ moves, startingFen = "start" }) => {
   ].join("\n");
 };
 
-export const parseStockfishLine = (line, fallbackRank = 1, startingFen = "start") => {
+export const parseStockfishLine = (
+  line: AnalysisLine,
+  fallbackRank: number = 1,
+  startingFen: string = "start"
+): AnalysisEntry => {
   const rawPv = Array.isArray(line.pv) ? line.pv.join(" ") : line.pv || "";
   const rawLine = (line.line || line.text || rawPv || "").trim();
   const cleaned = cleanNoise(rawLine);
   const coordinates = (rawLine || "").match(coordinateRegex) || [];
-  const moves = [];
+  const moves: Move[] = [];
+
   for (let index = 0; index + 1 < coordinates.length; index += 2) {
     const from = coordinates[index]?.toLowerCase();
     const to = coordinates[index + 1]?.toLowerCase();
@@ -93,9 +116,22 @@ export const parseStockfishLine = (line, fallbackRank = 1, startingFen = "start"
       moves.push({ from, to });
     }
   }
-  const scoreValue = line.score?.type === "mate" ? `Mate ${line.score.value}` : line.score?.value;
-  const scoreLabel = scoreValue ? (line.score?.type === "mate" ? scoreValue : `CP ${scoreValue}`) : null;
+
+  let scoreValue: string | number | undefined = undefined;
+  if (line.score) {
+    if ("type" in line.score && line.score.type === "mate" && "value" in line.score) {
+      scoreValue = `Mate ${line.score.value}`;
+    } else if ("value" in line.score && line.score.value !== undefined) {
+      scoreValue = line.score.value;
+    }
+  }
+  const scoreLabel: string | null = typeof scoreValue === "string"
+    ? scoreValue
+    : typeof scoreValue === "number"
+    ? `CP ${scoreValue}`
+    : null;
   const llmUserMessage = describeMovesForLlm({ moves, startingFen });
+
   return {
     id: line.id ?? `stockfish-line-${fallbackRank}`,
     rank: line.rank ?? fallbackRank,
@@ -108,7 +144,10 @@ export const parseStockfishLine = (line, fallbackRank = 1, startingFen = "start"
   };
 };
 
-export const deriveFenSequence = (moves, startingFen = "start") => {
+export const deriveFenSequence = (
+  moves: Move[],
+  startingFen: string = "start"
+): string[] => {
   const board = new Chess();
   if (startingFen && startingFen !== "start") {
     try {
@@ -120,7 +159,8 @@ export const deriveFenSequence = (moves, startingFen = "start") => {
     board.reset();
   }
   const initialFen = startingFen === "start" ? board.fen() : startingFen;
-  const sequence = [initialFen];
+  const sequence: string[] = [initialFen];
+
   for (const move of moves || []) {
     const nextMove = board.move({ from: move.from, to: move.to, promotion: "q" });
     if (!nextMove) {
@@ -131,24 +171,29 @@ export const deriveFenSequence = (moves, startingFen = "start") => {
   return sequence;
 };
 
-const parseFenString = (input) => {
+const parseFenString = (input: string): string[] | null => {
   const chess = new Chess();
-  if (chess.load(input)) {
+  try {
+    chess.load(input);
     return [input];
+  } catch {
+    return null;
   }
-  return null;
 };
 
-const parsePgn = (input) => {
+const parsePgn = (input: string): string[] | null => {
   const parser = new Chess();
-  if (!parser.loadPgn(input)) {
+  try {
+    parser.loadPgn(input);
+  } catch {
     return null;
   }
   const moves = parser.history();
   const board = new Chess();
-  const positions = [board.fen()];
+  const positions: string[] = [board.fen()];
+
   for (const san of moves) {
-    const result = board.move(san, { sloppy: true });
+    const result = board.move(san, { strict: false });
     if (!result) {
       break;
     }
@@ -157,7 +202,9 @@ const parsePgn = (input) => {
   return positions;
 };
 
-export const parseFenOrPgnInput = (input) => {
+export const parseFenOrPgnInput = (
+  input: string
+): { positions: string[] } | { error: string } => {
   if (!input) {
     return { error: "No input provided." };
   }
@@ -167,12 +214,14 @@ export const parseFenOrPgnInput = (input) => {
   }
   const fenParts = trimmed.split(/\s+/);
   const maybeFen = fenParts.length === 6 && trimmed.includes("/");
+
   if (maybeFen) {
     const fenResult = parseFenString(trimmed);
     if (fenResult) {
       return { positions: fenResult };
     }
   }
+
   const pgnPositions = parsePgn(trimmed);
   if (pgnPositions) {
     return { positions: pgnPositions };

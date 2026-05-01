@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Box } from "@mui/material";
 import { Chess } from "chess.js";
+import type { AnalysisBoardProps } from "../types";
 
 const detectChessboardConstructor = () => {
   if (typeof window === "undefined") {
     return null;
   }
-  return window.Chessboard || window.ChessBoard || null;
+  return (window as any).Chessboard || (window as any).ChessBoard || null;
 };
 
 export default function AnalysisBoard({
@@ -16,10 +17,10 @@ export default function AnalysisBoard({
   setStatusMessage,
   onBoardMove,
   size
-}) {
-  const boardRef = useRef(null);
-  const boardInstance = useRef(null);
-  const chess = useRef(new Chess());
+}: AnalysisBoardProps) {
+  const boardRef = useRef<HTMLDivElement>(null);
+  const boardInstance = useRef<any>(null);
+  const chess = useRef<Chess>(new Chess());
   const [ctor, setCtor] = useState(() => detectChessboardConstructor());
   const dimension =
     typeof size?.width === "number" && typeof size?.height === "number"
@@ -63,7 +64,7 @@ export default function AnalysisBoard({
       draggable: true,
       pieceTheme: pieceThemePath,
       position: currentFen,
-      onDrop: (source, target) => {
+      onDrop: (source: string, target: string) => {
         const move = chess.current.move({ from: source, to: target, promotion: "q" });
         if (!move) {
           return "snapback";
@@ -109,7 +110,7 @@ export default function AnalysisBoard({
       chess.current.load(currentFen);
       boardInstance.current.position(currentFen);
     } catch (err) {
-      setStatusMessage(`Invalid FEN stored: ${err?.message || "unable to load"}`);
+      setStatusMessage(`Invalid FEN stored: ${err instanceof Error ? err.message : "unable to load"}`);
     }
   }, [currentFen, setStatusMessage]);
 
