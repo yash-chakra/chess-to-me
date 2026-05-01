@@ -4,6 +4,7 @@ import {
   CircularProgress,
   IconButton,
   Paper,
+  Radio,
   Stack,
   TextField,
   Typography
@@ -37,7 +38,8 @@ export default function ChatPanel({
   analysisStatus,
   analysisLoading,
   onPlayLine,
-  onShowLine,
+  selectedAnalysisId,
+  onLineSelect,
   sx
 }) {
   const paperSx = Array.isArray(sx) ? sx : sx ? [sx] : [];
@@ -93,11 +95,14 @@ export default function ChatPanel({
             <Typography variant="subtitle2">Analysis</Typography>
             {analysisLoading && <CircularProgress size={16} />}
           </Stack>
+          <Typography variant="caption" color="text.secondary">
+            Select a line and use the left/right arrow keys to navigate the moves.
+          </Typography>
           <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pr: 0.5 }}>
             <Stack spacing={1}>
               {!hasEntries && (
                 <Typography variant="body2" color="text.secondary">
-                  Stockfish lines will appear here (select “Show line” to read the LLM analysis).
+                  Stockfish lines will appear here; select one to begin analyzing..
                 </Typography>
               )}
               {analysisRows.map((entry) => (
@@ -113,14 +118,14 @@ export default function ChatPanel({
                     gap: 1
                   }}
                 >
-                  <IconButton
+                  <Radio
                     size="small"
-                    aria-label={`Play line ${entry.rank}`}
-                    onClick={() => onPlayLine?.(entry.moves)}
-                  >
-                    <PlayArrowIcon fontSize="small" />
-                  </IconButton>
-                  <Typography variant="body2">
+                    value={entry.id}
+                    checked={selectedAnalysisId === entry.id}
+                    onChange={() => onLineSelect?.(entry)}
+                    inputProps={{ "aria-label": `Select line ${entry.rank}` }}
+                  />
+                  <Typography variant="body2" sx={{ flex: "1 1 auto" }}>
                     Line {entry.rank ?? entry.id}
                   </Typography>
                   {entry.scoreLabel && (
@@ -128,14 +133,16 @@ export default function ChatPanel({
                       {entry.scoreLabel}
                     </Typography>
                   )}
-                  <Button
+                  <IconButton
                     size="small"
-                    variant="text"
-                    onClick={() => onShowLine?.(entry)}
-                    sx={{ textTransform: "none" }}
+                    aria-label={`Play line ${entry.rank}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onPlayLine?.(entry.moves);
+                    }}
                   >
-                    Show line
-                  </Button>
+                    <PlayArrowIcon fontSize="small" />
+                  </IconButton>
                 </Box>
               ))}
             </Stack>

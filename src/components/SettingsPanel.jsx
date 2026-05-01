@@ -3,8 +3,12 @@ import {
   Box,
   Button,
   Chip,
+  FormControl,
   Grid,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   TextField,
   Typography
@@ -20,46 +24,103 @@ export default function SettingsPanel({
   settingsSaving,
   engineStatus,
   statusMessage,
-  systemStatus
+  systemStatus,
+  sx,
+  availableEngines,
+  selectedEngine,
+  onEngineChange
 }) {
   const systemChips = [
     { label: `Platform: ${systemStatus?.platform || "unknown"}`, color: "default" },
     {
-      label: systemStatus?.ollamaRunning ? "Ollama running" : "Ollama offline",
+      label: systemStatus?.ollamaRunning ? "Ollama serve running" : "Ollama offline",
       color: systemStatus?.ollamaRunning ? "success" : "error"
+    },
+    {
+      label: systemStatus?.ollamaRunActive ? "Ollama model active" : "Ollama model idle",
+      color: systemStatus?.ollamaRunActive ? "success" : "warning"
+    },
+    {
+      label: `Model: ${systemStatus?.activeModel || formState.ollamaModel}`,
+      color: "default"
     },
     {
       label: systemStatus?.qwen3Installed ? "qwen3 ready" : "qwen3 missing",
       color: systemStatus?.qwen3Installed ? "success" : "error"
-    },
-    {
-      label: systemStatus?.stockfishFound ? "Stockfish ready" : "Stockfish missing",
-      color: systemStatus?.stockfishFound ? "success" : "error"
     }
   ];
+  const availableModelList = Array.isArray(systemStatus?.availableModels)
+    ? systemStatus.availableModels.filter(Boolean)
+    : [];
+  const modelOptions = [...new Set([...(availableModelList || []), formState.ollamaModel || "qwen3:8b"])];
+
+  const selectedEngineFound = availableEngines?.some(
+    (engine) => engine.name === selectedEngine && engine.status === "installed"
+  );
 
   return (
-    <Paper elevation={3}>
+    <Paper
+      elevation={3}
+      sx={{
+        width: "100%",
+        height: "100%",
+        overflowY: "auto",
+        p: { xs: 2, md: 3 },
+        bgcolor: "background.paper",
+        ...sx
+      }}
+    >
       <Stack spacing={2}>
         <Typography variant="h5">Application settings</Typography>
         <Typography variant="body2" color="text.secondary">
-          Provide a valid Stockfish executable and the desired analysis/LLM configuration before moving to the analysis view.
+          Select a chess engine (Stockfish or LC0) and configure LLM analysis before moving to the analysis view.
         </Typography>
-        <TextField
-          label="Stockfish executable"
-          value={formState.stockfishPath}
-          onChange={(event) => onFieldChange("stockfishPath", event.target.value)}
-          fullWidth
-          helperText="Required for every position analysis"
-        />
-        <Stack direction="row" spacing={1}>
-          <Button variant="outlined" onClick={onDetect}>
-            Detect
-          </Button>
-          <Button variant="outlined" onClick={onBrowse}>
-            Browse
-          </Button>
-        </Stack>
+
+        <Typography variant="h6">Chess Engine</Typography>
+        <FormControl fullWidth>
+          <InputLabel id="engine-select-label">Engine</InputLabel>
+          <Select
+            labelId="engine-select-label"
+            label="Engine"
+            value={selectedEngine || ""}
+            onChange={(event) => onEngineChange?.(event.target.value)}
+          >
+            {availableEngines?.map((engine) => (
+              <MenuItem key={engine.name} value={engine.name}>
+                {engine.name.toUpperCase()} - {engine.status === "installed" ? "Installed" : "Not found"}
+              </MenuItem>
+            ))}
+          </Select>
+          {selectedEngineFound ? (
+            <Typography variant="caption" color="success.main" sx={{ mt: 1 }}>
+              ✓ Auto-detected at {formState[`${selectedEngine}Path`]}
+            </Typography>
+          ) : (
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+              {selectedEngine?.toUpperCase()} not configured
+            </Typography>
+          )}
+        </FormControl>
+
+        {!selectedEngineFound && (
+          <>
+            <TextField
+              label={`${selectedEngine?.toUpperCase() || "Engine"} executable path`}
+              value={formState[`${selectedEngine}Path`] || ""}
+              onChange={(event) => onFieldChange?.(`${selectedEngine}Path`, event.target.value)}
+              fullWidth
+              helperText="Path to engine binary (e.g., /usr/local/bin/lc0 or C:\\Program Files\\LC0\\lc0.exe)"
+            />
+            <Stack direction="row" spacing={1}>
+              <Button variant="outlined" onClick={onDetect} size="small">
+                Auto-detect
+              </Button>
+              <Button variant="outlined" onClick={onBrowse} size="small">
+                Browse
+              </Button>
+            </Stack>
+          </>
+        )}
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6}>
             <TextField
@@ -82,35 +143,32 @@ export default function SettingsPanel({
             />
           </Grid>
           <Grid item xs={12} sm={6}>
-            <TextField
-              label="LLM model"
-              value={formState.ollamaModel}
-              onChange={(event) => onFieldChange("ollamaModel", event.target.value)}
-              fullWidth
-            />
+            <FormControl fullWidth>
+              <InputLabel id="ollama-model-label">LLM model</InputLabel>
+              <Select
+                labelId="ollama-model-label"
+                label="LLM model"
+                value={formState.ollamaModel}
+                onChange={(event) => onFieldChange("ollamaModel", event.target.value)}
+              >
+                {modelOptions.map((model) => (
+                  <MenuItem key={model} value={model}>
+                    {model}
+                  </MenuItem>
+                ))}
+              </Select>
+              {systemStatus?.lastModelError && (
+                <Typography variant="caption" color="error">
+                  {systemStatus.lastModelError}
+                </Typography>
+              )}
+            </FormControl>
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField
               label="LLM base URL"
               value={formState.ollamaBaseUrl}
               onChange={(event) => onFieldChange("ollamaBaseUrl", event.target.value)}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              label="Reference API key (optional)"
-              value={formState.referenceApiKey}
-              onChange={(event) => onFieldChange("referenceApiKey", event.target.value)}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              label="Reference database users"
-              helperText="Comma-separated usernames"
-              value={formState.referenceDbUsers}
-              onChange={(event) => onFieldChange("referenceDbUsers", event.target.value)}
               fullWidth
             />
           </Grid>

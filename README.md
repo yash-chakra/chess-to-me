@@ -1,61 +1,76 @@
-# Chess To Me (Electron + Local Stockfish)
+﻿# Chess To Me (Electron + Dual Chess Engines)
 
-Desktop chess trainer that runs a locally installed Stockfish executable and lets you:
+Desktop chess analysis platform running locally installed chess engines (Stockfish or LC0) with AI explanations:
 
-- Auto-detect Stockfish first (saved path, common folders, `where/which` lookup)
-- Browse and select Stockfish executable if auto-detect fails
+- **Dual engine support**: Choose between Stockfish (traditional eval-based) or LC0 (neural network-based)
+- Auto-detect engines from standard installation paths or browse manually
 - Paste a FEN and load board position instantly
 - Drag pieces on a standard black/white chessboard
-- Analyze current position with up to 4 Stockfish PV lines (best line first)
-- Set analysis depth from app settings
+- Analyze current position with up to 4 engine PV lines (best line first)
+- Configurable analysis depth (6-30)
 - Generate per-line natural-language explanations in user-selected language using local Ollama
 - Select a line and step forward/backward through the line on the board
 - View line moves in figurine-style chess notation (piece symbols)
-- Open a tabbed `Reference Games` panel and replay games from a PGN database
 
 ## Quick Start
 
-1. Install dependencies:
+1. **Install dependencies**:
 
 ```bash
 npm install
 ```
 
-2. Run development mode:
+2. **Install a chess engine** (choose one or both):
+
+   - **Stockfish**: Download from https://stockfishchess.org/download/
+   - **LC0 (Leela Chess Zero)**: Download from https://github.com/LCZero/lc0/releases
+     - LC0 requires neural network weights (~800MB) — see [LC0_SETUP.md](LC0_SETUP.md) for details
+
+3. **Run development mode**:
 
 ```bash
 npm run dev
 ```
 
-3. The UI styling now comes from Material UI with a shared theme, so no separate CSS build step is required�just install the npm dependencies and the renderer applies the Material design system automatically.
+4. **Configure engine on first launch**:
 
-4. If Stockfish is not auto-detected:
+   - Settings panel opens automatically
+   - Select engine (Stockfish or LC0)
+   - Click "Auto-detect" or "Browse" to locate the executable
+   - Adjust analysis depth (6-30, default 16)
+   - Click "Go to analysis"
 
-- Click `Browse Executable` and pick `stockfish.exe` (Windows), or
-- Paste the executable path in `Manual path` and click `Save Path`.
+5. **For AI explanations** (optional):
 
-4. For AI explanations, make sure Ollama is running locally and a model is pulled (for example `qwen3`):
+   Make sure Ollama is running and a model is pulled:
 
-```bash
-ollama pull qwen3
-ollama serve
-```
+   ```bash
+   ollama pull qwen3
+   ollama serve
+   ```
+
+   Configure the LLM model and base URL in Settings.
 
 ## Project Structure
 
-- `electron/main.js`: app window + IPC + Stockfish process manager
+- `electron/main.js`: app window + IPC + dual engine process manager
 - `electron/preload.js`: secure renderer bridge API
-- `src/App.jsx`: React UI, analysis tab + reference games tab
-- `src/styles.css`: responsive layout and styles
+- `src/App.jsx`: React UI orchestrating settings, analysis, logs, and modular panels
+- `src/components/`: Material UI panels (`SettingsPanel`, `AnalysisBoard`, `ChatPanel`, `StatusBanner`)
+- `src/utils/ChessEngine.js`: Abstract base class defining engine interface
+- `src/utils/StockfishEngine.js`: Stockfish implementation
+- `src/utils/LC0Engine.js`: LC0 implementation
+- `src/utils/engineDiscovery.js`: Cross-platform engine detection and validation
+- `src/theme.js`: shared Material UI theme
+- `src/styles.css`: responsive layout styles
 - `vite.config.js`: renderer bundler config
-- `data/reference-games/world-champions-mini.pgn`: bundled sample reference games
 
 ## Notes
 
 - This starter runs everything locally; no cloud engine is required.
 - Engine path is persisted with `electron-store`.
 - UI fonts and icons are bundled locally via npm (`@fontsource/*`, `@fortawesome/fontawesome-free`) with no CDN dependency.
-- Styling is handled through Blueprint.js components/CSS imported from `@blueprintjs/core`, so no Tailwind/PostCSS build is required.
+- Styling relies on Material UI components and the shared theme in `src/theme.js`, so there is no Blueprint dependency and the renderer reuses modular panels for the analysis canvas.
 
 ## OpenSpec workflow
 
@@ -98,37 +113,5 @@ Installer output is written to `release/`.
 ```bash
 npm run nsis:version
 ```
-
-## Reference Game Databases
-
-The app can load any local `.pgn` database from the `Reference Games` tab.
-
-### Bundled Sample
-
-- A small PGN sample is shipped in `data/reference-games/world-champions-mini.pgn`.
-
-### Download Free Databases
-
-- Script to download free player PGNs:
-
-```bash
-npm run fetch:reference-games
-```
-
-- This downloads PGNs into `data/reference-games/downloaded`.
-
-### Runtime Database (No Massive Download Needed)
-
-In the `Reference Games` tab, you can fetch games directly from Lichess at runtime:
-
-- Enter a comma-separated list of usernames
-- Set minimum Elo (for example `2600`)
-- Set max games per user
-- Click `Fetch 2600+ Games Now`
-
-This avoids bundling very large PGN archives inside the installer.
-
-You can optionally provide an API token in app settings (`Reference API key`) for authenticated requests.
-For security, avoid hardcoding keys in source code or installer artifacts.
 
 
